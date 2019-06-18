@@ -12,7 +12,7 @@ import subprocess
 import xlrd
 from string import Template
 
-smart_sheet_client = smartsheet.Smartsheet('attvod4mfscdwx3658bwf1sgbb')
+smart_sheet_client = smartsheet.Smartsheet(<API KEY>)
 smart_sheet_client.errors_as_exceptions(True)
 
 
