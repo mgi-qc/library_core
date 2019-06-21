@@ -17,6 +17,7 @@ import subprocess
 import xlrd
 from string import Template
 
+
 API_KEY = os.environ.get('SMRT_API')
 
 if API_KEY is None:
