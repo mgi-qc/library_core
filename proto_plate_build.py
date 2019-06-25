@@ -3,14 +3,9 @@ __author__ = 'Thomas Antonacci'
 """ NOTES:
     Sorting will be seperate script
 
-    Need imp link fpr WOID and BC?------
+    dirs for dilution drops and frag plate files - handled in diff script
 
-    sample number in file names.--------
-    dirs for dilution drops and frag plate files
-    clean up output-------
 
-    Do not divide samples by 96 samples ----
-    imp link to freezer locations: what to do with 2pools
 """
 
 import smartsheet
@@ -19,11 +14,9 @@ import csv
 import os
 import sys
 import glob
-from datetime import datetime, timedelta
-import argparse
-import subprocess
+from datetime import datetime
 import xlrd
-from string import Template
+import webbrowser
 
 API_KEY = os.environ.get('SMRT_API')
 
@@ -94,17 +87,14 @@ def get_object(object_id, object_tag):
 
 """Read in Dilution Drop off and generate plate and tracking sheets as well as upload to/ update Smartsheet
 
-TODO:   Get DDO sheet and convert to csv ---------
-        Read in info and begin sort --------
-        assign to plate file------
-        update/upload to smartsheet
+TODO:   update/upload to smartsheet
         """
 
 mmddyy = datetime.now().strftime('%m%d%y')
 
 #os.rename('dilution_drop_off.xls', 'dilution_drop_off.excel')
 excel_files = glob.glob('*.excel')
-print(excel_files)
+
 for file in excel_files:
 
     xls_file = '{}.xls'.format(file.split('.excel')[0])
@@ -120,11 +110,14 @@ for file in excel_files:
         for rownum in range(xls_sheet.nrows):
             csv_write.writerow(xls_sheet.row_values(rownum))
 
-#get csv files... need more formatting information
-
-csv_file = 'dilution_drop_off.csv'
+#get csv files...
 csv_files = glob.glob('dilution_drop_off*.csv')
-#csv_files = ['dilution_drop_off.csv']
+xls_files = glob.glob('dilution_drop_off*.xls')
+
+if len(csv_files) == 0:
+    print('Dilution files not found!')
+    sys.exit()
+
 # Create file and read in different headings for pipelines
 
 
@@ -187,7 +180,7 @@ def check_woid(curr_woid, line, count_dict):
 
 
 #adds given line to file given by writer object and updates the sample count in dict
-def add_line_to_file(line, writer,count_dict):
+def add_line_to_file(line, writer,count_dict,barcode_dict):
     line_dict = {}
     for head in outfile_header_list[:-2]:
         line_dict[head] = line[head]
@@ -195,6 +188,7 @@ def add_line_to_file(line, writer,count_dict):
     #https://imp-lims.gsc.wustl.edu/entity/barcode/4v1Sqn
     line_dict['WO_link'] = 'https://imp-lims.gsc.wustl.edu/entity/setup-work-order/' + line['Outgoing Queue Work Order'].replace('.0','')
     #https://imp-lims.gsc.wustl.edu/entity/setup-work-order/2858611
+    barcode_dict[line['Barcode']] = line['Outgoing Queue Work Order']
 
     writer.writerow(line_dict)
     count_dict[line['Outgoing Queue Work Order']] += 1
@@ -229,7 +223,7 @@ def close_old_open_new(old_file, old_woid, old_pipe, new_woid, new_pipe, count_d
 
 #Close last file after all samples read it
 def term_file(old_file, old_woid, old_pipe, count_dict):
-    filename = old_woid.replace('.0','') + '_' + str(count_dict[old_woid]) + '_Frag_Plate_' + old_pipe + '_' + '_' + mmddyy + '.csv'
+    filename = old_woid.replace('.0','') + '_' + str(count_dict[old_woid]) + '_Frag_Plate_' + old_pipe + '_' + mmddyy + '.csv'
     old_file.close()
     os.rename(old_file.name, filename)
 
@@ -239,6 +233,7 @@ def term_file(old_file, old_woid, old_pipe, count_dict):
 
 #Initialize counting dicts and line variables
 count_dict = {}
+barcode_dict = {}
 ini = True
 current_wo = None
 current_pipe = None
@@ -263,57 +258,74 @@ with open('others.{}.csv'.format(mmddyy), 'w') as otherf:
 
                     if check_pipeline(line) == 'e':
                          writer,o_file = close_old_open_new(None,None,None,line['Outgoing Queue Work Order'],'Exome',count_dict,'ini')
-                         add_line_to_file(line, writer, count_dict)
+                         add_line_to_file(line, writer, count_dict,barcode_dict)
                          current_wo = line['Outgoing Queue Work Order']
                          current_pipe = 'Exome'
                     elif check_pipeline(line) == 'w':
                          writer,o_file = close_old_open_new(None, None, None, line['Outgoing Queue Work Order'], 'WGS', count_dict, 'ini')
-                         add_line_to_file(line, writer, count_dict)
+                         add_line_to_file(line, writer, count_dict,barcode_dict)
                          current_wo = line['Outgoing Queue Work Order']
                          current_pipe = 'WGS'
                     elif check_pipeline(line) == 'o':
-                        add_line_to_file(line,other_file_d,count_dict)
+                        add_line_to_file(line,other_file_d,count_dict,barcode_dict)
                         current_wo = line['Outgoing Queue Work Order']
                         current_pipe = 'Other'
                     ini = False
                 else:
-                    #Check WO -> Check pipeline -> add to appropriate file
+                    #Check WO -> Check pipeline -> add to appropriate file/ will also open and close files as necessary
                      if check_woid(current_wo, line, count_dict) == 'c':
-                        add_line_to_file(line,writer,count_dict)
+                        add_line_to_file(line,writer,count_dict,barcode_dict)
 
                      elif check_woid(current_wo,line,count_dict) == 'n':
                         if check_pipeline(line) == 'e':
                             writer, o_file = close_old_open_new(o_file,current_wo,current_pipe,line['Outgoing Queue Work Order'],'Exome',count_dict,'new')
-                            add_line_to_file(line,writer,count_dict)
+                            add_line_to_file(line,writer,count_dict,barcode_dict)
                             current_wo = line['Outgoing Queue Work Order']
                             current_pipe = 'Exome'
 
                         elif check_pipeline(line) == 'w':
                             writer, o_file = close_old_open_new(o_file,current_wo,current_pipe,line['Outgoing Queue Work Order'],'WGS',count_dict,'new')
-                            add_line_to_file(line,writer,count_dict)
+                            add_line_to_file(line,writer,count_dict,barcode_dict)
                             current_wo = line['Outgoing Queue Work Order']
                             current_pipe = 'WGS'
 
                         elif check_pipeline(line) == 'o':
-                            add_line_to_file(line,other_file_d,count_dict)
+                            add_line_to_file(line,other_file_d,count_dict,barcode_dict)
 
                      elif check_woid(current_wo,line,count_dict) == 'ex':
                          if check_pipeline(line) == 'e':
                              writer, o_file = close_old_open_new(o_file, current_wo, current_pipe,line['Outgoing Queue Work Order'], 'Exome', count_dict, 'existing')
-                             add_line_to_file(line, writer, count_dict)
+                             add_line_to_file(line, writer, count_dict,barcode_dict)
                              current_wo = line['Outgoing Queue Work Order']
                              current_pipe = 'Exome'
 
                          elif check_pipeline(line) == 'w':
                              writer, o_file = close_old_open_new(o_file, current_wo, current_pipe,line['Outgoing Queue Work Order'], 'WGS', count_dict, 'existing')
-                             add_line_to_file(line,writer,count_dict)
+                             add_line_to_file(line,writer,count_dict,barcode_dict)
                              current_wo = line['Outgoing Queue Work Order']
                              current_pipe = 'WGS'
 
                          elif check_pipeline(line) == 'o':
-                             add_line_to_file(line, other_file_d, count_dict)
-
+                             add_line_to_file(line, other_file_d, count_dict,barcode_dict)
+    #Close last Frag Plate file
     term_file(o_file,current_wo,current_pipe,count_dict)
+
+frag_files = glob.glob('*_Frag_Plate_WGS_062419.csv')
+
+
+
+
+for order in count_dict.keys():
+    wo_bcs = []
+    for bc in barcode_dict.keys():
+        if barcode_dict[bc] == order:
+            wo_bcs.append(bc)
+    freezerURL = 'https://imp-lims.gsc.wustl.edu/gsc/report/barcode/results?report_type=freezer_loc&override_cache='
+    for bc in wo_bcs:
+        freezerURL += '&barcode=' + bc
+    print('Work Order: ' + order.replace('.0',''))
+    print(freezerURL + '\n')
+    webbrowser.get('chrome').open_new_tab(freezerURL)
 
 
 
@@ -338,13 +350,12 @@ with open('pipelines_file.csv', 'w') as pipe_f:
         pipe_dict['Name'] = name
         pipe_dict_write.writerow(pipe_dict)
 
-#move files to desired directories
+#Make processed directory if needed
+if not os.path.exists('processed/dilution_drop_off_files/'):
+    os.makedirs('processed/dilution_drop_off_files/')
 
-print('Work Order\t# of Samples')
-for order in count_dict.keys():
-    print(order.replace('.0','') + '\t' + str(count_dict[order]))
-
-"""Add plate builder using recursion"""
-
-
-print('debug')
+#move dilution drop off files to processed directory; adds processed date to end of file
+for file in csv_files:
+    os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '_' + file.split('.')[1])
+for file in xls_files:
+    os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '_' + file.split('.')[1])
