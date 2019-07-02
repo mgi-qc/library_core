@@ -14,76 +14,11 @@ import subprocess
 import xlrd
 from string import Template
 
-API_KEY = os.environ.get('SMRT_API')
-
-if API_KEY is None:
-    sys.exit('Api key not found')
-
-smart_sheet_client = smartsheet.Smartsheet(API_KEY)
-smart_sheet_client.errors_as_exceptions(True)
-
-def create_folder(new_folder_name, location_id,location_tag):
-
-    if location_tag == 'f':
-        response = smart_sheet_client.Folders.create_folder_in_folder(str(location_id), new_folder_name)
-
-    elif location_tag == 'w':
-        response = smart_sheet_client.Workspaces.create_folder_in_workspace(str(location_id), new_folder_name)
-
-    elif location_tag == 'h':
-        response = smart_sheet_client.Home.create_folder(new_folder_name)
-
-    return response
-
-def create_workspace_home(workspace_name):
-    # create WRKSP command
-    workspace = smart_sheet_client.Workspaces.create_workspace(smartsheet.models.Workspace({'name': workspace_name}))
-    return workspace
-
-def get_sheet_list(location_id, location_tag):
-    #Read in all sheets for account
-    if location_tag == 'a':
-        ssin = smart_sheet_client.Sheets.list_sheets(include="attachments,source,workspaces",include_all=True)
-        sheets_list = ssin.data
-
-    elif location_tag == 'f' or location_tag == 'w':
-        location_object = get_object(str(location_id), location_tag)
-        sheets_list = location_object.sheets
-
-    return sheets_list
-
-def get_folder_list(location_id, location_tag):
-
-    if location_tag == 'f' or location_tag == 'w':
-        location_object = get_object(str(location_id), location_tag)
-        folders_list = location_object.folders
-
-    elif location_tag == 'a':
-        folders_list = smart_sheet_client.Home.list_folders(include_all=True)
-
-    return folders_list
-
-def get_workspace_list():
-    # list WRKSPs command
-    read_in = smart_sheet_client.Workspaces.list_workspaces(include_all=True)
-    workspaces = read_in.data
-    return workspaces
-
-def get_object(object_id, object_tag):
-
-    if object_tag == 'f':
-        obj = smart_sheet_client.Folders.get_folder(str(object_id))
-    elif object_tag == 'w':
-        obj = smart_sheet_client.Workspaces.get_workspace(str(object_id))
-    elif object_tag == 's':
-        obj = smart_sheet_client.Sheets.get_sheet(str(object_id))
-    return obj
-
 mmddyy = datetime.now().strftime('%m%d%y')
 
 #get files and set up lists and dicts
 freeze_loc_files = glob.glob('*Freezer Loc*')
-frag_files = glob.glob('*_Frag_Plate_*.csv')
+frag_files = glob.glob('*_Frag_Temp_*.csv')
 new_files = []
 
 freeze_loc_dict = {}
@@ -139,10 +74,12 @@ for file in new_files:
 for file in barcd_fnd:
     os.rename(file, file.replace('_new','.csv'))
 
+
 #Make processed freezer files dir if needed
 if not os.path.exists('processed/freezer_loc_files'):
     os.makedirs('processed/freezer_loc_files')
 
 #Move processed freezer location files; adds processed date to file name
 for file in freeze_loc_files:
-    os.rename(file, 'processed/freezer_loc_files/' + file.split('.')[0] +'_' + mmddyy + '_' + file.split('.')[1])
+    os.rename(file, 'processed/freezer_loc_files/' + file.split('.')[0] +'_' + mmddyy + '.' + file.split('.')[1])
+
