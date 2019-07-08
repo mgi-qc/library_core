@@ -1,14 +1,5 @@
 __author__ = 'Thomas Antonacci'
 
-""" NOTES:
-    Sorting will be seperate script
-
-    dirs for dilution drops and frag plate files - handled in diff script
-
-
-"""
-
-import smartsheet
 
 import csv
 import os
@@ -17,83 +8,10 @@ import glob
 from datetime import datetime
 import xlrd
 import webbrowser
-
-
-API_KEY = os.environ.get('SMRT_API')
-
-if API_KEY is None:
-    sys.exit('Api key not found')
-
-smart_sheet_client = smartsheet.Smartsheet(API_KEY)
-smart_sheet_client.errors_as_exceptions(True)
-
-
-
-def create_folder(new_folder_name, location_id,location_tag):
-
-    if location_tag == 'f':
-        response = smart_sheet_client.Folders.create_folder_in_folder(str(location_id), new_folder_name)
-
-    elif location_tag == 'w':
-        response = smart_sheet_client.Workspaces.create_folder_in_workspace(str(location_id), new_folder_name)
-
-    elif location_tag == 'h':
-        response = smart_sheet_client.Home.create_folder(new_folder_name)
-
-    return response
-
-def create_workspace_home(workspace_name):
-    # create WRKSP command
-    workspace = smart_sheet_client.Workspaces.create_workspace(smartsheet.models.Workspace({'name': workspace_name}))
-    return workspace
-
-def get_sheet_list(location_id, location_tag):
-    #Read in all sheets for account
-    if location_tag == 'a':
-        ssin = smart_sheet_client.Sheets.list_sheets(include="attachments,source,workspaces",include_all=True)
-        sheets_list = ssin.data
-
-    elif location_tag == 'f' or location_tag == 'w':
-        location_object = get_object(str(location_id), location_tag)
-        sheets_list = location_object.sheets
-
-    return sheets_list
-
-def get_folder_list(location_id, location_tag):
-
-    if location_tag == 'f' or location_tag == 'w':
-        location_object = get_object(str(location_id), location_tag)
-        folders_list = location_object.folders
-
-    elif location_tag == 'a':
-        folders_list = smart_sheet_client.Home.list_folders(include_all=True)
-
-    return folders_list
-
-def get_workspace_list():
-    # list WRKSPs command
-    read_in = smart_sheet_client.Workspaces.list_workspaces(include_all=True)
-    workspaces = read_in.data
-    return workspaces
-
-def get_object(object_id, object_tag):
-
-    if object_tag == 'f':
-        obj = smart_sheet_client.Folders.get_folder(str(object_id))
-    elif object_tag == 'w':
-        obj = smart_sheet_client.Workspaces.get_workspace(str(object_id))
-    elif object_tag == 's':
-        obj = smart_sheet_client.Sheets.get_sheet(str(object_id))
-    return obj
-
-"""Read in Dilution Drop off and generate plate and tracking sheets as well as upload to/ update Smartsheet
-
-TODO:   update/upload to smartsheet
-        """
+import time
 
 mmddyy = datetime.now().strftime('%m%d%y')
 
-#os.rename('dilution_drop_off.xls', 'dilution_drop_off.excel')
 excel_files = glob.glob('*.excel')
 
 for file in excel_files:
@@ -119,10 +37,10 @@ if len(csv_files) == 0:
     print('Dilution files not found!')
     sys.exit()
 
+
 # Create file and read in different headings for pipelines
+outfile_header_list = ['Barcode', 'Source BC', 'Content_Desc','Total_DNA (ng)','Volume (ul)','Outgoing Queue Work Order','Outgoing Queue Work Order Pipeline','Outgoing Queue Work Order Description','BC_link','WO_link']
 
-
-outfile_header_list = ['Barcode', 'Content_Desc','Total_DNA (ng)','Volume (ul)','Outgoing Queue Work Order','Outgoing Queue Work Order Pipeline','Outgoing Queue Work Order Description','BC_link','WO_link']
 
 #Read in pipeline file and load pipeline lists
 try:
@@ -143,6 +61,7 @@ try:
 except:
     print('Pipeline File not found')
     exit()
+
 
 #Determine Pipeline, update pipeline lists if needed, and return tag
 def check_pipeline(line):
@@ -194,6 +113,7 @@ def add_line_to_file(line, writer,count_dict,barcode_dict):
     writer.writerow(line_dict)
     count_dict[line['Outgoing Queue Work Order']] += 1
 
+
 #closes given old file and, new temp file, updates the count and plate dict
 def close_old_open_new(old_file, old_woid, old_pipe, new_woid, new_pipe, count_dict, reason):
     if reason == 'ini':
@@ -205,7 +125,7 @@ def close_old_open_new(old_file, old_woid, old_pipe, new_woid, new_pipe, count_d
         return dict_writer,new_file
 
     else:
-        filename = old_woid.replace('.0','') + '_' + str(count_dict[old_woid]) + '_Frag_Plate_' + old_pipe + '_'  + mmddyy + '.csv'
+        filename = old_woid.replace('.0','') + '_' + str(count_dict[old_woid]) + '_Frag_Temp_' + old_pipe + '_'  + mmddyy + '.csv'
         old_file.close()
         os.rename(old_file.name, filename)
 
@@ -217,17 +137,17 @@ def close_old_open_new(old_file, old_woid, old_pipe, new_woid, new_pipe, count_d
             return dict_writer, new_file
 
         elif reason == 'existing':
-            ex_filename = new_woid.replace('.0','') + '_' + str(count_dict[new_woid]) +  '_Frag_Plate_' + new_pipe + '_' + mmddyy + '.csv'
+            ex_filename = new_woid.replace('.0','') + '_' + str(count_dict[new_woid]) +  '_Frag_Temp_' + new_pipe + '_' + mmddyy + '.csv'
             new_file = open(ex_filename, 'a')
             dict_writer = csv.DictWriter(new_file, delimiter=',',fieldnames=outfile_header_list)
             return dict_writer, new_file
 
+
 #Close last file after all samples read it
 def term_file(old_file, old_woid, old_pipe, count_dict):
-    filename = old_woid.replace('.0','') + '_' + str(count_dict[old_woid]) + '_Frag_Plate_' + old_pipe + '_' + mmddyy + '.csv'
+    filename = old_woid.replace('.0','') + '_' + str(count_dict[old_woid]) + '_Frag_Temp_' + old_pipe + '_' + mmddyy + '.csv'
     old_file.close()
     os.rename(old_file.name, filename)
-
 
 
 """MAIN"""
@@ -254,7 +174,7 @@ with open('others.{}.csv'.format(mmddyy), 'w') as otherf:
 
             for line in ddo_dict:
 
-                #Initialize on first line read in
+                #Initialize on first line
                 if ini == True:
 
                     if check_pipeline(line) == 'e':
@@ -308,14 +228,13 @@ with open('others.{}.csv'.format(mmddyy), 'w') as otherf:
 
                          elif check_pipeline(line) == 'o':
                              add_line_to_file(line, other_file_d, count_dict,barcode_dict)
-    #Close last Frag Plate file
+    #Close last Frag Temp file
     term_file(o_file,current_wo,current_pipe,count_dict)
 
-frag_files = glob.glob('*_Frag_Plate_WGS_062419.csv')
+frag_files = glob.glob('*_Frag_Temp_*_*.csv')
 
 
-
-
+#Open Freezer location file for work orders
 for order in count_dict.keys():
     wo_bcs = []
     for bc in barcode_dict.keys():
@@ -327,7 +246,6 @@ for order in count_dict.keys():
     print('Work Order: ' + order.replace('.0',''))
     print(freezerURL + '\n')
     webbrowser.get('chrome').open_new_tab(freezerURL)
-
 
 
 #update pipeline file with any changes to pipeline lists
@@ -351,12 +269,14 @@ with open('pipelines_file.csv', 'w') as pipe_f:
         pipe_dict['Name'] = name
         pipe_dict_write.writerow(pipe_dict)
 
+
 #Make processed directory if needed
 if not os.path.exists('processed/dilution_drop_off_files/'):
     os.makedirs('processed/dilution_drop_off_files/')
 
+
 #move dilution drop off files to processed directory; adds processed date to end of file
 for file in csv_files:
-    os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '_' + file.split('.')[1])
+    os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '.' + file.split('.')[1])
 for file in xls_files:
-    os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '_' + file.split('.')[1])
+    os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '.' + file.split('.')[1])
