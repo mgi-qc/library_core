@@ -12,26 +12,25 @@ List of sample objects -> plates as many lists (output as plate files with WO an
 Push to smart sheet
 """
 
-
 import smartsheet
 import csv
 import os
 import sys
 import glob
 from datetime import datetime
-import xlrd
 import webbrowser
 import time
 import copy
 import math
 import operator
 
+#Smartsheet client ini
 API_KEY = os.environ.get('SMRT_API')
 
 if API_KEY is None:
     sys.exit('Api key not found')
 
-smart_sheet_client = smartsheet.Smartsheet(API_KEY)
+smart_sheet_client = smartsheet.smartsheet.Smartsheet(API_KEY)
 smart_sheet_client.errors_as_exceptions(True)
 
 mmddyy = datetime.now().strftime('%m%d%y')
@@ -102,13 +101,6 @@ def get_object(object_id, object_tag):
     elif object_tag == 's':
         obj = smart_sheet_client.Sheets.get_sheet(str(object_id))
     return obj
-
-def get_wo_dir_list():
-    """work in progress"""
-
-    wo_dir_list = glob.glob('[0-9][0-9][0-9][0-9][0-9][0-9][0-9]')
-    return wo_dir_list
-
 
 #Classes for plate building
 class sample:
@@ -275,7 +267,7 @@ def print_lists():
         print(lst,end='\t')
     print('\n----------------')
 
-def check_opt(usable):
+def check_opt():
     global opt_lists
     global opt_found
 
@@ -304,7 +296,7 @@ def next_key():
             count += 1
             put_in_lists(key)
             usable_keys.remove(key)
-            check_opt(usable_keys)
+            check_opt()
             if check_bound(key):
                 rec_depth += 1
                 next_key()
@@ -321,6 +313,8 @@ Read in Files and load objects(samples, plates and work orders) and lists
 
 #get frag_files
 wo_frag_files = glob.glob('*Frag_Temp*.csv')
+if not len(wo_frag_files) > 0:
+    sys.exit('No Frag_Temp files found!')
 wgs_files = []
 exome_files = []
 
@@ -375,27 +369,29 @@ for file in wo_frag_files:
         webbrowser.get('chrome').open_new_tab(FFPE_url)
 
 FFPE_present = input('Are there FFPE samples present? (y/n): ')
+if FFPE_present == 'y':
+    print('Would you like to:\n1. Enter comma separated list of barcodes\n2. Import Samples sheets from IMP(WIP)')
+    while True:
+        option = input('Please enter 1 or 2: ')
+        if is_int(option) and 0 < int(option) <= 1:
+            option = int(option)
+            break
+        elif is_int(option) and int(option) == 2:
+            print('Option 2 is under construction; use option 1.')
 
-print('Would you like to:\n1. Enter comma separated list of barcodes\n2. Import Samples sheets from IMP?')
-while True:
-    option = input('Please enter 1 or 2: ')
-    if is_int(option) and 0 < int(option) <= 1:
-        option = int(option)
-        break
-    elif is_int(option) and int(option) == 2:
-        print('Option 2 is under construction; use option 1.')
+    if option == 1:
+        FFPE_list = input('Please enter the barcodes as a comma separated list(No white space): ')
 
-if option == 1:
-    FFPE_list = input('Please enter the barcodes as a comma separated list(No white space): ')
-
-    for barcode in FFPE_list.split(','):
-        found = False
-        for samp in samples_master:
-            if samp.sourcebc == barcode:
-                FFPE_samples.append(samp)
-                found = True
-        if not found:
-            print('{} not found!'.format(barcode))
+        for barcode in FFPE_list.split(','):
+            found = False
+            for samp in samples_master:
+                if samp.sourcebc == barcode:
+                    FFPE_samples.append(samp)
+                    found = True
+            if not found and not FFPE_list == '':
+                print('{} not found!'.format(barcode))
+    if option == 2:
+        exit('How did you get here...?')
 
 #Building in plates!
 plates_in_master = []
@@ -554,14 +550,14 @@ for plt in temp_plates_master:
 plt_del = []
 for plt in Exome_sortable_plates:
     for pltc in Exome_sortable_plates:
-        if plt.wo == pltc.wo and pltc not in plt_del and plt not in plt_del:
+        if plt.wo == pltc.wo and pltc not in plt_del and plt not in plt_del and pltc is not plt:
             for samp in plt.samples:
                 pltc.samples.append(samp)
                 plt_del.append(plt)
 
 for plt in WGS_sortable_plates:
     for pltc in Exome_sortable_plates:
-        if plt.wo == pltc.wo and pltc not in plt_del and plt not in plt_del:
+        if plt.wo == pltc.wo and pltc not in plt_del and plt not in plt_del and pltc is not plt:
             for samp in plt.samples:
                 pltc.samples.append(samp)
                 plt_del.append(plt)
@@ -621,8 +617,11 @@ for plt in full_plates:
 
 usable_keys = []
 
-#Sort Exome
 
+"""
+Sort Exome
+--------------------------------
+"""
 wo_dict = {}
 
 #Populate Dictionary
@@ -652,7 +651,7 @@ while count < min_plates:
     lists.append([])
     count += 1
 
-while len(lists) < len(wo_dict.keys()) and not opt_found:
+while len(lists) <= len(wo_dict.keys()) and not opt_found:
     count = 0
     next_key()
     lists.append([])
@@ -666,7 +665,7 @@ for sol in opt_lists:
         for samp in plt:
             total += wo_dict[samp]
             count += 1
-    if best_sol_total < 96 * count - total:
+    if best_sol_total > 96 * count - total:
         best_sol_total = 96 * count - total
         best_sol = sol
 
@@ -680,9 +679,11 @@ for plt in best_sol:
                 for samp in plte.samples:
                     Exome_out_plates[len(Exome_out_plates) - 1].add_sample(samp)
 
-
-#Sort WGS
-
+"""
+Sort WGS
+------------------------------------
+"""
+usable_keys = []
 wo_dict = {}
 
 #Populate Dictionary
@@ -744,7 +745,6 @@ for plt in best_sol:
                     WGS_out_plates[len(WGS_out_plates) - 1].add_sample(samp)
 
 
-
 #Choose plates to go out or keep
 hold_list = []
 small_plates = []
@@ -768,7 +768,7 @@ else:
     while True:
         plt_in = input('Enter the plate numbers you want to hold.\n(Enter 0 to exit or if you wish to run all): ')
 
-        if is_number(plt_in) and int(plt_in) < count and int(plt_in) > 0:
+        if is_int(plt_in) and 0 < int(plt_in) < count:
             hold_list.append(small_plates[int(plt_in) - 1])
         elif int(plt_in) == 0:
             break
@@ -831,7 +831,9 @@ for plt in Exome_out_plates:
 
 
 for file in FFPE_list:
+    plate_files.remove(file)
     os.rename(file, file.replace('Frag_Plate','Frag_Plate_FFPE'))
+    plate_files.append(file.replace('Frag_Plate','Frag_Plate_FFPE'))
 
 """
 Build Held plate files
@@ -860,25 +862,77 @@ for plt in hold_list:
 
 
 for file in FFPE_list:
-    os.rename(file, file.replace('Frag_Plate','Frag_Plate_FFPE'))
+    os.rename(file, file.replace('Frag_Plate','FFPE_Frag_Plate'))
 
 """
 Push to SmartSheet
 ------------------------------------------------------------
-
-WIP!!!
 """
 
+workspaces = get_workspace_list()
+
+for workspace in workspaces:
+    if workspace.name == 'Production Pipeline':
+        prod_workspace = workspace
+
+prod_folders = get_folder_list(prod_workspace.id, 'w')
+
+for folder in prod_folders:
+    if folder.name == 'OPG':
+        OPG_folder = folder
+
+OPG_folders = get_folder_list(OPG_folder.id, 'f')
+
+for folder in OPG_folders:
+    if folder.name == 'lib_core':
+        lib_core_folder = folder
+
+lib_core_folder = get_object(lib_core_folder.id, 'f')
+
+for sheet in lib_core_folder.sheets:
+    if sheet.name == 'plate_assignment_sheet':
+        assgn_sheet = sheet
+
+assgn_sheet = get_object(assgn_sheet.id, 's')
+num_rows = len(assgn_sheet.rows) + 1
+
+assgn_sheet_col_ids = {}
+
+for col in assgn_sheet.columns:
+    assgn_sheet_col_ids[col.title] = col.id
+
+for file in plate_files:
+    imported_sheet = smart_sheet_client.Folders.import_csv_sheet(
+      lib_core_folder.id,           # folder_id
+      file,
+      file,  # sheet_name
+      header_row_index=0
+    ).data
+
+    # get FFPE tag
+    if 'FFPE' in file:
+        FFPE = True
+    else:
+        FFPE = False
 
 
+    new_row = smartsheet.smartsheet.models.Row()
+    new_row.to_bottom = True
 
+    new_row.cells.append({'column_id': assgn_sheet_col_ids['Plate File Name'], 'value': file})
+    new_row.cells.append({'column_id': assgn_sheet_col_ids['Link to Plate Sheet'], 'value': file, 'hyperlink' : {"sheetId" : imported_sheet.id}})
+    new_row.cells.append({'column_id': assgn_sheet_col_ids['No. of Samples'], 'value': file.split('_')[1]})
+    new_row.cells.append({'column_id': assgn_sheet_col_ids['FFPE Flag'], 'value': FFPE})
+    new_row.cells.append({'column_id': assgn_sheet_col_ids['Task'], 'formula': '=IF([Fragmentation Complete]{} = 1, IF([Lib Construction Complete]{} = 1, IF([QC Complete]{} = 1, "Complete", "QC"), "Lib Construction"), "Fragmentation")'.format(num_rows,num_rows,num_rows)})
 
-
+    smart_sheet_client.Sheets.add_rows(assgn_sheet.id, [new_row])
+    num_rows += 1
 
 """
 Move Files to correct places
 ------------------------------------------------------------
 """
+
 
 if not os.path.exists('processed/frag_temps/'):
     os.makedirs('processed/frag_temps/')
@@ -890,6 +944,3 @@ hold_list = glob.glob('hold*')
 
 for file in hold_list:
     os.rename(file, file.replace('hold_',''))
-
-print('debug_statemnet')
-
