@@ -365,7 +365,7 @@ time.sleep(1.5)
 #Open samples page URL for work orders
 for file in wo_frag_files:
         wo = file.split('_')[0]
-        FFPE_url = 'https://imp-lims.gsc.wustl.edu/entity/setup-work-order/{}?setup_name={}&perspective=Sample'.format(wo.replace('.0',''),wo.replace('.0',''))
+        FFPE_url = 'https://imp-lims.ris.wustl.edu/entity/setup-work-order/{}?setup_name={}&perspective=Sample'.format(wo.replace('.0',''),wo.replace('.0',''))
         webbrowser.get('chrome').open_new_tab(FFPE_url)
 
 FFPE_present = input('Are there FFPE samples present? (y/n): ')
@@ -916,6 +916,10 @@ for file in plate_files:
         FFPE = False
 
 
+    """
+    Add status to frag plate sheet using 
+    """
+
     new_row = smartsheet.smartsheet.models.Row()
     new_row.to_bottom = True
 
@@ -944,3 +948,4 @@ hold_list = glob.glob('hold*')
 
 for file in hold_list:
     os.rename(file, file.replace('hold_',''))
+

@@ -107,10 +107,10 @@ def add_line_to_file(line, writer,count_dict,barcode_dict):
     line_dict = {}
     for head in outfile_header_list[:-2]:
         line_dict[head] = line[head]
-    line_dict['BC_link'] = 'https://imp-lims.gsc.wustl.edu/entity/barcode/' + line['Barcode']
-    #https://imp-lims.gsc.wustl.edu/entity/barcode/4v1Sqn
-    line_dict['WO_link'] = 'https://imp-lims.gsc.wustl.edu/entity/setup-work-order/' + line['Outgoing Queue Work Order'].replace('.0','')
-    #https://imp-lims.gsc.wustl.edu/entity/setup-work-order/2858611
+    line_dict['BC_link'] = 'https://imp-lims.ris.wustl.edu/entity/barcode/' + line['Barcode']
+    #https://imp-lims.ris.wustl.edu/entity/barcode/4v1Sqn
+    line_dict['WO_link'] = 'https://imp-lims.ris.wustl.edu/entity/setup-work-order/' + line['Outgoing Queue Work Order'].replace('.0','')
+    #https://imp-lims.ris.wustl.edu/entity/setup-work-order/2858611
     barcode_dict[line['Barcode']] = line['Outgoing Queue Work Order']
 
     writer.writerow(line_dict)
@@ -243,7 +243,7 @@ for order in count_dict.keys():
     for bc in barcode_dict.keys():
         if barcode_dict[bc] == order:
             wo_bcs.append(bc)
-    freezerURL = 'https://imp-lims.gsc.wustl.edu/gsc/report/barcode/results?report_type=freezer_loc&override_cache='
+    freezerURL = 'https://imp-lims.ris.wustl.edu/ris/report/barcode/results?report_type=freezer_loc&override_cache='
     for bc in wo_bcs:
         freezerURL += '&barcode=' + bc
     print('Work Order: ' + order.replace('.0',''))
