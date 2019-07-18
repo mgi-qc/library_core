@@ -243,9 +243,11 @@ for order in count_dict.keys():
     for bc in barcode_dict.keys():
         if barcode_dict[bc] == order:
             wo_bcs.append(bc)
-    freezerURL = 'https://imp-lims.ris.wustl.edu/ris/report/barcode/results?report_type=freezer_loc&override_cache='
+    #https://imp-lims.ris.wustl.edu/gsc/report/barcode/results?report_type=freezer_loc&override_cache=&barcode=4v1Xi2&barcode=4v1XhV&barcode=4v1XhW&barcode=4v1XhU&barcode=4v1XhX&barcode=4v1XhY&barcode=4v1Xi1&barcode=4v1XhS&barcode=4v1XhT&barcode=4v1Xi4&barcode=4v1Xi0&barcode=4v1Xi3&barcode=4v1Xi5&barcode=4v1Xi6&barcode=4v1XhZ&dna=&administration_project=&dna_type=&freezer=&freezer_temp=&incoming_queue_function_id=&outgoing_queue_function_id=&filter_prefix=&research_project_attribute=&work_order_attribute=&freezer_group_filter=&pse_id=&dna_prefix=&start_date=&time_base_attribute_name=&end_date=&time_unit=&application_role=Report%3A%3ARole%3A%3AWrapper&go=Search%21
+    freezerURL = 'https://imp-lims.ris.wustl.edu/gsc/report/barcode/results?report_type=freezer_loc&override_cache='
     for bc in wo_bcs:
         freezerURL += '&barcode=' + bc
+    freezerURL += '&dna=&administration_project=&dna_type=&freezer=&freezer_temp=&incoming_queue_function_id=&outgoing_queue_function_id=&filter_prefix=&research_project_attribute=&work_order_attribute=&freezer_group_filter=&pse_id=&dna_prefix=&start_date=&time_base_attribute_name=&end_date=&time_unit=&application_role=Report%3A%3ARole%3A%3AWrapper&go=Search%21'
     print('Work Order: ' + order.replace('.0',''))
     print(freezerURL + '\n')
     webbrowser.get('chrome').open_new_tab(freezerURL)
