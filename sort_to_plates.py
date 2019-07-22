@@ -204,107 +204,26 @@ class work_order:
             self.samples.append(sampl)
             return None
 
+#Functions and variables for sorting
 
-#Globals for Sorting
-global opt_lists
-opt_lists = []
-global count
-count = 0
-global capacity
 capacity = 96
-global opt_found
-opt_found = False
-all_the_lists = []
-global rec_depth
-rec_depth = 0
+
+def add_to_bins(item,bins):
+    for b in bins:
+        bin_value = 0
+        for t in b:
+            bin_value += wo_dict[t]
+        if bin_value + wo_dict[item] < capacity:
+            b.append(item)
+            return
+    bins.append([])
+    add_to_bins(item)
+    return
 
 
-#Functions for sorting
-def insert_to_usable_keys(key):
-    found = False
-    i = 0
-
-    if len(usable_keys) == 0:
-        usable_keys.append(key)
-    else:
-        while i < len(usable_keys) and not found:
-            if wo_dict[key] > wo_dict[usable_keys[i]]:
-                usable_keys.insert(usable_keys.index(usable_keys[i]),key)
-                found = True
-            i +=1
-        if not found:
-            usable_keys.append(key)
-
-def add_to_used(key):
-    used_keys.append(key)
-
-def remove_from_used(key):
-    if key in used_keys:
-        used_keys.remove(key)
-
-def put_in_lists(item):
-    global capacity
-    for lst in lists:
-        list_total = 0
-        smallest_thing = True
-        for thing in lst:
-            list_total += wo_dict[thing]
-            if wo_dict[thing] < wo_dict[item]:
-                smallest_thing = False
-
-        if list_total + wo_dict[item] < capacity and smallest_thing:
-            lst.append(item)
-            add_to_used(item)
-            break
-
-def remove_from_lists(item):
-    for lst in lists:
-        if item in lst:
-            lst.remove(item)
-
-def print_lists():
-    for lst in lists:
-        print(lst,end='\t')
-    print('\n----------------')
-
-def check_opt():
-    global opt_lists
-    global opt_found
-
-    if len(used_keys) == len(wo_dict.keys()):
-        opt_found = True
-        opt_lists.append(copy.deepcopy(lists))
-
-def check_bound(key):
-    global opt_found
-
-    if opt_found:
-        return False
-
-    if key in used_keys:
-        return True
-    else:
-        return False
-
-def next_key():
-    global count
-    global rec_depth
-
-
-    for key in usable_keys:
-        if not opt_found and count < 1000000:
-            count += 1
-            put_in_lists(key)
-            usable_keys.remove(key)
-            check_opt()
-            if check_bound(key):
-                rec_depth += 1
-                next_key()
-                rec_depth -= 1
-                remove_from_lists(key)
-                remove_from_used(key)
-            insert_to_usable_keys(key)
-
+def ffd(usable_list,bins):
+    for item in usable_list:
+        add_to_bins(item,bins)
 
 """
 Read in Files and load objects(samples, plates and work orders) and lists
@@ -357,7 +276,11 @@ for file in exome_files:
             samples_master.append(sample(line['Barcode'], line['Freezer_Loc'], line['Outgoing Queue Work Order'], 'Exome',line['Source BC']))
             count += 1
 
-#Get FFPE samples based on either file or BC
+"""
+Get FFPE samples based on either file or BC
+---------------------------------------------------
+"""
+
 FFPE_samples = []
 print('Opening work order samples page in IMP...')
 time.sleep(1.5)
@@ -393,7 +316,11 @@ if FFPE_present == 'y':
     if option == 2:
         exit('How did you get here...?')
 
-#Building in plates!
+"""
+Build incoming plates
+---------------------------------------------------
+"""
+
 plates_in_master = []
 plate_in_count = 0
 
@@ -475,8 +402,10 @@ hard_plates = []
 Exome_out_plates = []
 WGS_out_plates = []
 
-"""get easy plates
-        i.e. get plates of 96 samples with same WO as these can be handed off with no extra work"""
+"""
+get easy plates
+    i.e. get plates of 96 samples with same WO as these can be handed off with no extra work
+        """
 
 for plt in plates_in_master:
 
@@ -623,53 +552,34 @@ Sort Exome
 --------------------------------
 """
 wo_dict = {}
+usable_list = []
+total = 0
+plates = []
 
 #Populate Dictionary
 for plt in Exome_sortable_plates:
     wo_dict[plt.wo[0]] = len(plt.samples)
+    total += len(plt.samples)
+
+#Calc lower bound
+low_bnd = total/capacity
+
+#Load plates list with min needed
+while len(plates) <= low_bnd:
+    plates.append([])
 
 #Sort Dict by # of samples
 sorted_tuples = sorted(wo_dict.items(),key=operator.itemgetter(1), reverse=True)
 
-#Populate list of plates
+#Load list of wo's
 for item in sorted_tuples:
-    usable_keys.append(item[0])
+    usable_list.append(item[0])
 
-#get total samples to be sorted
-total = 0
-for key in wo_dict:
-    total += wo_dict[key]
+#first fit decreasing method
+ffd(usable_list,plates)
 
-#Lower bound for number of plates needed
-min_plates = math.ceil(total/capacity)
-
-#ini lists and call sort
-lists = []
-used_keys = []
-count = 0
-while count < min_plates:
-    lists.append([])
-    count += 1
-
-while len(lists) <= len(wo_dict.keys()) and not opt_found:
-    count = 0
-    next_key()
-    lists.append([])
-
-best_sol = []
-best_sol_total = 100000000
-for sol in opt_lists:
-    total = 0
-    count = 0
-    for plt in sol:
-        for samp in plt:
-            total += wo_dict[samp]
-            count += 1
-    if best_sol_total > 96 * count - total:
-        best_sol_total = 96 * count - total
-        best_sol = sol
-
-for plt in best_sol:
+#Load Outgoing plates based on sol found by FFD
+for plt in plates:
     Exome_out_plates.append(plate())
     Exome_out_plates[len(Exome_out_plates) - 1].pipe = 'Exome'
     for order in plt:
@@ -683,58 +593,35 @@ for plt in best_sol:
 Sort WGS
 ------------------------------------
 """
-usable_keys = []
+usable_list = []
 wo_dict = {}
+total = 0
+plates.clear()
 
 #Populate Dictionary
 for plt in WGS_sortable_plates:
     wo_dict[plt.wo[0]] = len(plt.samples)
+    total += len(plt.samples)
+
+#Calc lower bound
+low_bnd = total/capacity
+
+#Load plates list with min needed
+while len(plates) <= low_bnd:
+    plates.append([])
 
 #Sort Dict by # of samples
 sorted_tuples = sorted(wo_dict.items(),key=operator.itemgetter(1), reverse=True)
 
-#Populate list of plates
+#Load list of wo's
 for item in sorted_tuples:
-    usable_keys.append(item[0])
+    usable_list.append(item[0])
 
-#get total samples to be sorted
-total = 0
-for key in wo_dict:
-    total += wo_dict[key]
+#first fit decreasing method
+ffd(usable_list,plates)
 
-#Lower bound for number of plates needed
-min_plates = math.ceil(total/capacity)
-
-#reini lists and call sort
-lists = []
-used_keys = []
-count = 0
-opt_found = False
-opt_lists = []
-while count < min_plates:
-    lists.append([])
-    count += 1
-
-while len(lists) <= len(wo_dict.keys()) and not opt_found:
-    count = 0
-    next_key()
-    lists.append([])
-
-best_sol = []
-best_sol_total = 100000000
-for sol in opt_lists:
-    total = 0
-    count = 0
-    for plt in sol:
-        for samp in plt:
-            total += wo_dict[samp]
-            count += 1
-    if best_sol_total > 96 * count - total:
-        best_sol_total = 96 * count - total
-        best_sol = sol
-
-
-for plt in best_sol:
+#Load Outgoing plates based on sol found by FFD
+for plt in plates:
     WGS_out_plates.append(plate())
     WGS_out_plates[len(WGS_out_plates) - 1].pipe = 'WGS'
     for order in plt:
@@ -745,7 +632,12 @@ for plt in best_sol:
                     WGS_out_plates[len(WGS_out_plates) - 1].add_sample(samp)
 
 
-#Choose plates to go out or keep
+"""
+Choose plates to go out or keep
+---------------------------------------------------
+"""
+
+
 hold_list = []
 small_plates = []
 for plt in WGS_out_plates:
