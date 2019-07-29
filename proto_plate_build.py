@@ -8,7 +8,7 @@ import glob
 from datetime import datetime
 import xlrd
 import webbrowser
-import time
+import subprocess
 
 mmddyy = datetime.now().strftime('%m%d%y')
 
@@ -43,24 +43,27 @@ outfile_header_list = ['Barcode', 'Source BC', 'Content_Desc','Total_DNA (ng)','
 
 
 #Read in pipeline file and load pipeline lists
-try:
-    with open('pipelines_file.csv', 'r+') as pipe_f:
-        wgs_pipe_list = []
-        exome_pipe_list = []
-        other_pipe_list = []
+while True:
+    try:
+        with open('pipelines_file.csv', 'r+') as pipe_f:
+            wgs_pipe_list = []
+            exome_pipe_list = []
+            other_pipe_list = []
 
-        pipe_read = csv.DictReader(pipe_f,delimiter=',')
-        pipe_head = pipe_read.fieldnames
-        for line in pipe_read:
-            if line['Pipeline'] == 'e':
-                exome_pipe_list.append(line['Name'])
-            elif line['Pipeline'] == 'w':
-                wgs_pipe_list.append(line['Name'])
-            elif line['Pipeline'] == 'o':
-                other_pipe_list.append(line['Name'])
-except:
-    print('Pipeline File not found')
-    exit()
+            pipe_read = csv.DictReader(pipe_f,delimiter=',')
+            pipe_head = pipe_read.fieldnames
+            for line in pipe_read:
+                if line['Pipeline'] == 'e':
+                    exome_pipe_list.append(line['Name'])
+                elif line['Pipeline'] == 'w':
+                    wgs_pipe_list.append(line['Name'])
+                elif line['Pipeline'] == 'o':
+                    other_pipe_list.append(line['Name'])
+        break
+    except:
+        print('Pipeline File not found\nBuilding pipelines_file.csv...')
+        with open('pipelines_file.csv', 'w') as pipes:
+            pipes.write('Name,Pipeline')
 
 
 #Determine Pipeline, update pipeline lists if needed, and return tag
@@ -280,3 +283,11 @@ for file in csv_files:
     os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '.' + file.split('.')[1])
 for file in xls_files:
     os.rename(file, 'processed/dilution_drop_off_files/' + file.split('.')[0] +'_' + mmddyy + '.' + file.split('.')[1])
+
+while True:
+    cont = input('Are you ready to continue? (y/n): ')
+    if cont == 'y':
+        subprocess.run(['python3.7', 'add_freezer_loc.py'])
+        break
+    elif cont == 'n':
+        print('Please move the freezer loc files to the RB_Dropoff directory and enter "y" to continue')

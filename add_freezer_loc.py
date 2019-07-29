@@ -2,17 +2,13 @@ __author__ = 'Thomas Antonacci'
 
 """Add freezer location to given work order frag file"""
 
-import smartsheet
-
 import csv
 import os
-import sys
 import glob
-from datetime import datetime, timedelta
-import argparse
+from datetime import datetime
 import subprocess
-import xlrd
-from string import Template
+
+
 
 mmddyy = datetime.now().strftime('%m%d%y')
 
@@ -83,3 +79,4 @@ if not os.path.exists('processed/freezer_loc_files'):
 for file in freeze_loc_files:
     os.rename(file, 'processed/freezer_loc_files/' + file.split('.')[0] +'_' + mmddyy + '.' + file.split('.')[1])
 
+subprocess.run(['python3.7', 'sort_to_plates.py'])
