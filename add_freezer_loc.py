@@ -19,7 +19,6 @@ new_files = []
 
 freeze_loc_dict = {}
 found_dict = {}
-not_found_dict = {}
 barcd_fnd = []
 
 
@@ -56,10 +55,6 @@ for file in frag_files:
 
     if loc_added:
         barcd_fnd.append(newfragfile.name)
-
-#id what barcodes not found: Need output
-for key in freeze_loc_dict.keys():
-    not_found_dict[key] = freeze_loc_dict.pop(key)
 
 #removes unused files: Need output
 for file in new_files:

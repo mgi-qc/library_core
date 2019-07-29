@@ -365,7 +365,7 @@ time.sleep(1.5)
 #Open samples page URL for work orders
 for file in wo_frag_files:
         wo = file.split('_')[0]
-        FFPE_url = 'https://imp-lims.gsc.wustl.edu/entity/setup-work-order/{}?setup_name={}&perspective=Sample'.format(wo.replace('.0',''),wo.replace('.0',''))
+        FFPE_url = 'https://imp-lims.ris.wustl.edu/entity/setup-work-order/{}?setup_name={}&perspective=Sample'.format(wo.replace('.0',''),wo.replace('.0',''))
         webbrowser.get('chrome').open_new_tab(FFPE_url)
 
 FFPE_present = input('Are there FFPE samples present? (y/n): ')
@@ -915,9 +915,10 @@ for file in plate_files:
     else:
         FFPE = False
 
-
     new_row = smartsheet.smartsheet.models.Row()
     new_row.to_bottom = True
+
+
 
     new_row.cells.append({'column_id': assgn_sheet_col_ids['Plate File Name'], 'value': file})
     new_row.cells.append({'column_id': assgn_sheet_col_ids['Link to Plate Sheet'], 'value': file, 'hyperlink' : {"sheetId" : imported_sheet.id}})
@@ -925,8 +926,53 @@ for file in plate_files:
     new_row.cells.append({'column_id': assgn_sheet_col_ids['FFPE Flag'], 'value': FFPE})
     new_row.cells.append({'column_id': assgn_sheet_col_ids['Task'], 'formula': '=IF([Fragmentation Complete]{} = 1, IF([Lib Construction Complete]{} = 1, IF([QC Complete]{} = 1, "Complete", "QC"), "Lib Construction"), "Fragmentation")'.format(num_rows,num_rows,num_rows)})
 
-    smart_sheet_client.Sheets.add_rows(assgn_sheet.id, [new_row])
+    response = smart_sheet_client.Sheets.add_rows(assgn_sheet.id, [new_row])
+    response = response.data
+
+    """
+    need row and column id's to create reference ---
+    uses the same row/column as start/finish
+    append column to import sheet
+    update rows with the new cross sheet reference
+    """
+
+    xref = smartsheet.models.CrossSheetReference({
+    'name': 'plt_assgn_ref',
+    'source_sheet_id': assgn_sheet.id,
+    'start_row_id': response.id,
+    'end_row_id': response.id,
+    'start_column_id': assgn_sheet_col_ids['Task'],
+    'end_column_id': assgn_sheet_col_ids['Task']
+    })
+
+    smart_sheet_client.Sheets.create_cross_sheet_reference(
+        imported_sheet.id, xref)
+
+    new_column = smartsheet.smartsheet.models.Column({
+        'title': 'Status',
+        'type': 'TEXT/NUMBER',
+        'index': len(imported_sheet.columns) + 1
+    })
+
+    col_response = smart_sheet_client.add_columns(imported_sheet.id,[new_column]).data
+
+    for row in imported_sheet.rows:
+
+        up_row = smartsheet.smartsheet.models.Row()
+        for cel in row.cells:
+            up_row.cells.append(cel)
+
+        new_cell = smartsheet.smartsheet.models.Cell()
+        new_cell.column_id = col_response.id
+        new_cell.formula = 'plt_assgn_ref'
+
+        up_row.cells.append(new_cell)
+
+    smart_sheet_client.Sheets.update_rows(imported_sheet.id, [up_row])
+
     num_rows += 1
+
+
 
 """
 Move Files to correct places
@@ -944,3 +990,4 @@ hold_list = glob.glob('hold*')
 
 for file in hold_list:
     os.rename(file, file.replace('hold_',''))
+
