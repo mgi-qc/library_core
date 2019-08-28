@@ -239,7 +239,6 @@ exome_files = []
 
 total_samples = 0
 
-
 #get total samples
 for file in wo_frag_files:
     num = int(file.split('_')[1])
@@ -264,6 +263,10 @@ for file in wgs_files:
         header = file_reader.fieldnames
 
         for line in file_reader:
+            try:
+                line['Freezer_Loc']
+            except KeyError:
+                sys.exit('Freezer Location not found in {}'.format(file))
             samples_master.append(sample(line['Barcode'],line['Freezer_Loc'],line['Outgoing Queue Work Order'] ,'WGS',line['Source BC']))
             count += 1
 
@@ -273,6 +276,10 @@ for file in exome_files:
         header = file_reader.fieldnames
 
         for line in file_reader:
+            try:
+                line['Freezer_Loc']
+            except KeyError:
+                sys.exit('Freezer Location not found in {}'.format(file))
             samples_master.append(sample(line['Barcode'], line['Freezer_Loc'], line['Outgoing Queue Work Order'], 'Exome',line['Source BC']))
             count += 1
 
@@ -576,7 +583,9 @@ for item in sorted_tuples:
     usable_list.append(item[0])
 
 #first fit decreasing method
-ffd(usable_list,plates)
+if len(usable_list) > 0:
+    ffd(usable_list,plates)
+
 
 #Load Outgoing plates based on sol found by FFD
 for plt in plates:
@@ -607,7 +616,7 @@ for plt in WGS_sortable_plates:
 low_bnd = total/capacity
 
 #Load plates list with min needed
-while len(plates) <= low_bnd:
+while len(plates) <= low_bnd and low_bnd != 0:
     plates.append([])
 
 #Sort Dict by # of samples
@@ -618,7 +627,8 @@ for item in sorted_tuples:
     usable_list.append(item[0])
 
 #first fit decreasing method
-ffd(usable_list,plates)
+if len(usable_list) > 0:
+    ffd(usable_list,plates)
 
 #Load Outgoing plates based on sol found by FFD
 for plt in plates:
@@ -657,13 +667,16 @@ else:
     for plt in small_plates:
         print('Plate {}: {:<39} {}'.format(count,' '.join(plt.wo).replace('.0',''),len(plt.samples)))
         count += 1
+
     while True:
         plt_in = input('Enter the plate numbers you want to hold.\n(Enter 0 to exit or if you wish to run all): ')
 
-        if is_int(plt_in) and 0 < int(plt_in) < count:
+        if is_int(plt_in) and 0 < int(plt_in) < count and not plt_in == '':
             hold_list.append(small_plates[int(plt_in) - 1])
         elif int(plt_in) == 0:
             break
+        else:
+            print('Enter a number between 0 and {}'.format(count))
 
 for plt in hold_list:
     if plt in WGS_out_plates:
@@ -741,16 +754,22 @@ for plt in hold_list:
             if order.replace('.0','') in file:
                 with open(file, 'r') as ff:
                     frag_reader = csv.DictReader(ff, delimiter = ',')
-                    new_filename = 'hold_'+file
-                    with open(new_filename, 'w') as off:
+                    filename = 'hold_'+file
+                    with open(filename, 'w') as off:
                         frag_writer = csv.DictWriter(off, delimiter = ',', fieldnames=header)
+                        frag_writer.writeheader()
                         for line in frag_reader:
                             for samp in plt.samples:
                                 if line['Barcode'] == samp.name:
                                     frag_writer.writerow(line)
+                                    samp_count += 1
                                     if samp in FFPE_samples:
                                         if plate_file not in FFPE_list:
                                             FFPE_list.append(plate_file)
+        new_filename = filename.split('_')
+        new_filename[2] = str(samp_count)
+        new_filename = '_'.join(new_filename)
+        os.rename(filename, new_filename)
 
 
 for file in FFPE_list:
@@ -801,6 +820,8 @@ for file in plate_files:
       header_row_index=0
     ).data
 
+    imported_sheet = get_object(imported_sheet.id, 's')
+
     # get FFPE tag
     if 'FFPE' in file:
         FFPE = True
@@ -831,8 +852,8 @@ for file in plate_files:
     xref = smartsheet.models.CrossSheetReference({
     'name': 'plt_assgn_ref',
     'source_sheet_id': assgn_sheet.id,
-    'start_row_id': response.id,
-    'end_row_id': response.id,
+    'start_row_id': response[0].id,
+    'end_row_id': response[0].id,
     'start_column_id': assgn_sheet_col_ids['Task'],
     'end_column_id': assgn_sheet_col_ids['Task']
     })
@@ -842,25 +863,28 @@ for file in plate_files:
 
     new_column = smartsheet.smartsheet.models.Column({
         'title': 'Status',
-        'type': 'TEXT/NUMBER',
+        'type': 'TEXT_NUMBER',
         'index': len(imported_sheet.columns) + 1
     })
 
-    col_response = smart_sheet_client.add_columns(imported_sheet.id,[new_column]).data
+    col_response = smart_sheet_client.Sheets.add_columns(imported_sheet.id,[new_column]).data[0]
 
+    import_rows = []
     for row in imported_sheet.rows:
 
         up_row = smartsheet.smartsheet.models.Row()
+        up_row.id = row.id
         for cel in row.cells:
             up_row.cells.append(cel)
 
         new_cell = smartsheet.smartsheet.models.Cell()
         new_cell.column_id = col_response.id
-        new_cell.formula = 'plt_assgn_ref'
+        new_cell.formula = '={plt_assgn_ref}'
 
         up_row.cells.append(new_cell)
+        import_rows.append(up_row)
 
-    smart_sheet_client.Sheets.update_rows(imported_sheet.id, [up_row])
+    smart_sheet_client.Sheets.update_rows(imported_sheet.id, import_rows)
 
     num_rows += 1
 
